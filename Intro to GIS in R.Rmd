@@ -1,0 +1,210 @@
+---
+title: "R Fridays GIS Tutorial"
+author: "Danielle Clake"
+date: "12 March 2018"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, include = TRUE, eval = TRUE)
+```
+
+```{r, eval=FALSE}
+setwd("C:/User/Documents/R Fridays/GIS Data in R")
+```
+
+#Spatial Data Types
+The two major types of GIS data are *vector* format (a set of spatially referenced points, lines, or polygons that are each assigned one or more attributes) and *raster* format (a continuous grid of pixels or "cells" which each have an assigned value - think of a digital image as an example, where the assigned value would be a specific colour for each pixel). We will use both in this tutorial.
+
+#Install and Load Packages
+This code will install and load the packages used in this tutorial. If packages are already installed and/or loaded users should skip the code below. Prompts to load packages will also be provided in text before the first time each package is used.
+```{r}
+x <- c("raster", "rgdal", "rgeos", "tmap")
+```
+
+Uncomment the code below if you need to install/load packages:
+```{r, results = 'hide', warning = FALSE, message = FALSE}
+#install.packages(x)
+lapply(x, library, character.only = TRUE)
+```
+
+
+#Vector Data
+##Load data and view structure
+We will be using the **rgal** package to load our spatial data in R. This package has a function *readOGR* which requires two inputs: dsn (the "data source name") and the name of the layer. Note that for this function we do not need to include a file extension after the data name.
+```{r, results = 'hide', warning = FALSE, message = FALSE}
+library(rgdal)
+PROVINCE <- readOGR(dsn = "Data/shapefiles", layer = "Prov_Boundary_GeoGratis")
+plot(PROVINCE) #(sorry territories - lots of small islands made it slow to plot)
+```
+
+The information for this spatial data is stored in "slots":
+```{r}
+#str(PROVINCE)
+slotNames(PROVINCE)
+```
+
+We can use the "@data" slot to see the attribute table for our data. Using the "$" will automatically query for that column name in the data.
+```{r}
+PROVINCE@data
+PROVINCE$NAME
+
+#To create a new shapefile that only includes Alberta:
+AB <- PROVINCE[PROVINCE$NAME == "ALBERTA",]
+plot(AB)
+```
+
+The "@proj4string" slot tells us the coordinate reference system (CRS) for this data.
+```{r}
+AB@proj4string
+```
+
+I won't go into too much detail about CRS and projections today, but we do need to make sure that we are using the same projection. The province layer is in a geographic coordinate system using lat/long and decimal degrees as units.
+```{r, results = 'hide', warning = FALSE, message = FALSE}
+#If we add data that is in a different CRS (e.g. UTM Zone 12N), it will not line up properly
+RSA_U12 <- readOGR(dsn = "Data/shapefiles", layer = "RSA_UTM12")
+RSA_U12@proj4string
+plot(RSA_U12, add = TRUE)
+
+#We can reproject it to match our province CRS as follows:
+RSA <- spTransform(RSA_U12, proj4string(AB))
+plot(RSA, add = TRUE)
+```
+
+
+##Add sampling points
+Often times, we will have a table with coordinates that we need to turn into spatial data
+```{r}
+#Import coordinate table
+SL <- read.csv("./Data/SampleLocations_UTM12.csv")
+
+#Turn into a "Spatial Points Data Frame" by specifying columns with coordinates
+coordinates(SL) <- cbind("UTM_East", "UTM_North")
+
+#Specify projection
+proj4string(SL) <- "+proj=utm +zone=12 +datum=NAD83 +units=m +no_defs +ellps=GRS80 +towgs84=0,0,0"
+
+str(SL)
+plot(SL)
+```
+
+
+##Add and view sample data
+Now that we have our pretend locations, we can pretend that we collected some data at these locations, and add it to our points.
+```{r}
+set.seed(12)
+SL$Abundance <- rpois(12, 5)
+SL@data
+```
+
+Next, use the *tmap* package to visualize these data
+```{r, results = 'hide', warning = FALSE, message = FALSE}
+#First, add our local study area (LSA) to add context to our points
+LSA_U12 <- readOGR(dsn = "Data/shapefiles", layer = "LSA_UTM12")
+
+#Now create a quick map
+Abun_Map <- tm_shape(LSA_U12) +
+  tm_polygons(col = "white") +
+tm_shape(SL) +
+  tm_bubbles("Abundance", 
+             col = "blue", 
+             scale = 2, 
+             sizes.legend = c(1, 5, 10)) +
+  tm_text("Loc_ID", auto.placement = 1) +
+tm_layout(outer.margins=0, inner.margins=c(0.15,0.15,0.05,0.05), asp = 0) +
+tm_scale_bar()
+
+Abun_Map
+```
+
+##Basic spatial analysis
+We can then do various analyses on these spatial points, for example by calculating the distance between them using the "spDists" tool in the *sp* package:
+```{r}
+spDists(SL)
+```
+
+Perhaps we also want to know how long it would take to visit each of these locations. We can do this by creating a line between them, then calculating the length of that line.
+```{r}
+#Create line that passes through all sample locations
+PathLine <- SpatialLines(list(Lines(Line(cbind(SL$UTM_East,SL$UTM_North)), "L1")))
+
+#Define projection for the line
+proj4string(PathLine) <- "+proj=utm +zone=12 +datum=NAD83 +units=m +no_defs +ellps=GRS80 +towgs84=0,0,0"
+
+#Plot line on top of sample locations
+Abun_Map +
+  tm_shape(PathLine) +
+    tm_lines(col = "black")
+
+#Calculate length of line (the units here will be meters based on our projection)
+SpatialLinesLengths(PathLine)
+```
+
+
+##Add landcover data as vector
+In the "data" folder I have included a clipped land cover dataset downloaded from the Alberta Biodiversity Monitoring Institute (ABMI)
+```{r, results = 'hide', warning = FALSE, message = FALSE}
+ABMI_LC <- readOGR(dsn = "Data/shapefiles", layer = "LC_ABMI_2010_UTM12")
+head(ABMI_LC@data)
+```
+
+We can also map this land cover data. Here I have picked certain colours in a palette to represent the different land cover types. Since there were relatively few classes I picked them manually using the following website:
+https://htmlcolorcodes.com/
+
+However there are also some good "cheatsheets" and programs available to do this automatically:
+https://www.nceas.ucsb.edu/~frazier/RSpatialGuides/colorPaletteCheatsheet.pdf
+
+```{r}
+#Create colour palette for data
+levels(ABMI_LC$LC_desc)
+LC.palette <- c("#3e7a3e", "#e2825f", "#ad8048", "#cff94f", 
+                "#a9adaa", "#f7cb5b", "#ffffff", "#6cbdf7")
+
+#Create map of data:
+tm_shape(ABMI_LC) + #Specify shapefile to be mapped
+  tm_fill("LC_desc", palette = LC.palette,  title = "Land Cover") + #select fill data
+tm_shape(SL) +
+  tm_bubbles("Abundance", 
+             col = "black", 
+             scale = 1, 
+             sizes.legend = c(1, 5, 10)) +
+tm_layout(outer.margins=0, inner.margins=c(0.15,0.3,0.01,0.01), asp = 0) +
+tm_scale_bar()
+```
+
+
+#Raster Data
+Often the spatial data that we want to use is best represented in raster format - especially for continuous variables (e.g. elevation) or variables covering a landscape (e.g. landcover)
+
+First, create a template raster with the spatial extent ("ext") and projection ("crs") set to be the same as our polygon landcover layer ("ABMI_LC"). We are using a resolution, or pixel size, of 100 map units (in this case metres).
+```{r}
+template.raster <- raster(ext = extent(ABMI_LC), resolution = 100, crs = CRS(projection(ABMI_LC)))
+```
+
+Next we essentially "stamp" our land cover polygons onto our template raster.
+```{r}
+#This step may take a couple minutes to run:
+LCrast <- rasterize(x = ABMI_LC, y = template.raster, field = "LC_class", fun = 'last') 
+
+plot(LCrast) #lets see what our raster looks like!
+```
+
+##Buffer sampling locations and extract values
+First we need to create "buffers", or circles with a set radius around our sampling locations. We will do this using the *gBuffer* tool in the **rgeos** package. We then can extract the landcover values within each buffer using the *extract* tool in the **raster** package.
+```{r}
+#Create 1000 m buffers around sampling locations:
+SL_buffer1km <- gBuffer(spgeom = SL, byid = TRUE, id = SL$Loc_ID, width = 1000)
+plot(LCrast)
+plot(SL_buffer1km, add = TRUE) #look at the buffers created
+
+#Extract number of pixels of each land cover class under each polygon:
+LC1km <- raster::extract(x = LCrast, y = SL_buffer1km)
+
+#Find frequency of each land class within each polygon:
+LC1km.fq <- lapply(LC1km, table) 
+
+#Calculate proportion of land cover within each polygon:
+LC1km.pr <- lapply(LC1km.fq, FUN = function(x){x/sum(x)}) 
+
+LC1km.pr
+```
