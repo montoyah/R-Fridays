@@ -9,9 +9,6 @@ output: pdf_document
 knitr::opts_chunk$set(echo = TRUE, include = TRUE, eval = TRUE)
 ```
 
-```{r, eval=FALSE}
-setwd("C:/User/Documents/R Fridays/GIS Data in R")
-```
 
 #Spatial Data Types
 The two major types of GIS data are *vector* format (a set of spatially referenced points, lines, or polygons that are each assigned one or more attributes) and *raster* format (a continuous grid of pixels or "cells" which each have an assigned value - think of a digital image as an example, where the assigned value would be a specific colour for each pixel). We will use both in this tutorial.
@@ -24,14 +21,21 @@ x <- c("raster", "rgdal", "rgeos", "tmap")
 
 Uncomment the code below if you need to install/load packages:
 ```{r, results = 'hide', warning = FALSE, message = FALSE}
-#install.packages(x)
+#install.packages(x, dependencies = TRUE)
 lapply(x, library, character.only = TRUE)
+
 ```
 
 
 #Vector Data
 ##Load data and view structure
 We will be using the **rgal** package to load our spatial data in R. This package has a function *readOGR* which requires two inputs: dsn (the "data source name") and the name of the layer. Note that for this function we do not need to include a file extension after the data name.
+
+```{r, eval=FALSE}
+setwd("C:/User/Documents/R Fridays/GIS Data in R")
+```
+
+
 ```{r, results = 'hide', warning = FALSE, message = FALSE}
 library(rgdal)
 PROVINCE <- readOGR(dsn = "Data/shapefiles", layer = "Prov_Boundary_GeoGratis")
