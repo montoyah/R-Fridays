@@ -1,0 +1,382 @@
+---
+title: 'Intro to *data wrangling*' 
+subtitle: 'dplyr & tidyr workshop'
+author: "Sam Robinson"
+date: "April 20, 2018"
+output: ioslides_presentation
+widescreen: true
+df_print: kable
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, cache=TRUE)
+library(tidyr)
+library(dplyr)
+library(ggplot2)
+theme_set(theme_classic())
+```
+
+Normal data manipulation in R
+---
+```{r, echo=T, tidy=T, eval=F}
+#Changes spp to factor
+plants$Species <- as.factor(plants$Species) 
+#Changes plant code to factor
+plants$Plant.Code <- as.factor(plants$Plant.Code) 
+#Changes Seed to factor
+seeds$Seed <- as.factor(seeds$Seed) 
+#Changes plant code to factor
+seeds$Plant.Code <- as.factor(seeds$Plant.Code)
+#Selects Flower, Code, Total.Germ columns
+germ <- germ[,c('Flower','Code','Total.Germ')] 
+
+#Sets numerics
+plants[,c(3:9)] <- as.numeric(unlist(plants[,c(3:9)])) 
+#Sets Dates
+seeds$Collection.Date <- as.Date(seeds$Collection.Date,origin='2012-01-01')
+```
+
+Data manipulation using dplyr/tidyr
+---
+```{r, echo=T,tidy=T,eval=F}
+library(dplyr); library(tidyr);
+#Convert factors in plants df
+plants <- mutate(plants,Species=factor(Species),Plant.Code=factor(Plant.Code))
+#Convert factors in seeds df
+seeds <- mutate(seeds,Seed=factor(Seed),Plant.Code=factor(Plant.Code))
+#Select Flower, Code, and Total.Germ columns in germ df
+germ <- select(germ,Flower,Code,Total.Germ)
+
+#Change columns 3:9 to numeric
+plants <- plants %>% 
+  mutate_at(vars(3:9),funs(as.numeric))
+#Convert Collection.Date to Date format
+seeds <- mutate(Collection.Date=as.Date(Collection.Date,origin='2012-01-01'))
+```
+
+- More compact, less typing
+- Easier to read
+- Faster (matters for large datasets)
+
+How does this work?
+---
+Things to learn today:
+
+- Basic syntax and table verbs
+- Piping
+- Reshaping
+- Grouping
+- Exercise!
+- Final remarks
+
+Basic Syntax
+---
+Both dplyr and tidyr work with data frames or tibbles
+
+- data frame: similar to matrix, but with different data types for each column
+- tibble: "compact" data frame, with some annoying features removed
+
+```{r,echo=T,tidy=T,eval=T}
+head(iris) #Regular data frame
+```
+
+Basic Syntax
+---
+```{r,echo=T,tidy=T,eval=T,message=F}
+as_tibble(iris) #This is usually done automatically
+```
+Basic verbs - subsetting
+---
+- **select**: returns only columns that you want
+
+```{r,echo=T,tidy=T,eval=T,message=F}
+head(iris,3) 
+#Select Petal.Length,Petal.Width,Species
+irisTemp <- select(iris,Petal.Length,Petal.Width,Species)
+head(irisTemp,3)
+```
+
+Basic verbs - subsetting
+---
+Helper functions for **select**: *colon* operator
+
+```{r,echo=T,tidy=T,eval=T,message=F}
+irisTemp <- select(iris,Petal.Length:Species) 
+head(irisTemp,3) #All columns between Petal.Length and Species
+irisTemp2 <- select(iris,Petal.Length,Petal.Width,Species) 
+head(irisTemp2,3) #This is the same thing
+```
+
+Basic verbs - subsetting
+---
+Helper functions for **select**: -, and *contains*
+
+```{r,echo=T,tidy=T,eval=T,message=F}
+irisTemp <- select(iris,-Species) 
+head(irisTemp,3) #Selects all columns EXCEPT Species
+irisTemp2 <- select(iris,contains('Petal'))
+head(irisTemp2,3) #Selects columns with names containing 'Petal'
+```
+
+Basic verbs - subsetting
+---
+- **filter**: returns only rows that you want
+
+```{r,echo=T,tidy=T,eval=T,message=F}
+head(iris,3) 
+irisTemp <- filter(iris,Sepal.Length<5,Species=='versicolor')
+head(irisTemp,3) #Chooses rows matching logical criteria
+```
+
+Basic verbs - make new variables
+---
+- **mutate**: add variables or alter existing ones
+
+```{r,echo=T,tidy=T,eval=T,message=F}
+head(iris,3)
+irisTemp <- mutate(iris,P.Width2=Petal.Width^2)
+head(irisTemp,3) #Squares Petal.Width
+```
+
+Basic verbs - make new variables
+---
+```{r,echo=T,tidy=T,eval=T,message=F}
+head(irisTemp,3)
+irisTemp <- mutate(iris,P.Width2=(Petal.Width^2)*2)
+head(irisTemp,3) #Alters variable in place
+```
+
+Basic verbs - make new variables
+---
+- **mutate_at**: uses same function on columns of choice
+```{r,echo=T,tidy=T,eval=T,message=F,warning=F}
+head(iris,3)
+irisTemp <- mutate_at(iris,vars(Petal.Width,Petal.Length),funs(.^2))
+head(irisTemp,3) #Squares Petal.Width & Length. "." means "data from column"
+```
+
+Basic verbs - make new variables
+---
+- **rename** & **transmute**
+```{r,echo=T,tidy=T,eval=T,message=F,warning=F}
+irisTemp <- rename(iris,PWidth=Petal.Width,PLength=Petal.Length)
+head(irisTemp,3) #Renames columns
+irisTemp2 <- transmute(iris,P.Width2=(Petal.Width^2))
+head(irisTemp2,3) #Same as mutate, but drops other columns
+```
+
+Exercises!
+---
+Using the *iris* dataset:
+
+- Filter only "virginica" rows
+- Make 2 new "area" columns, which are length $\times$ width of Petals and Sepals
+- Get rid of all columns except "Species" + 2 new columns
+
+```{r,echo=F}
+ iris %>% filter(Species=='virginica') %>%
+  transmute(Species,P.Area=Petal.Length*Petal.Width,S.Area=Sepal.Length*Sepal.Width) %>% 
+  head(10)
+```
+
+
+Piping - %>% 
+---
+- Takes data from one verb and passes it to the next one
+- Allows you to string together complex operations
+```{r,echo=T,tidy=F,eval=T,message=F,warning=F}
+irisTemp <- select(iris,Sepal.Length,Species) %>% #Selects Sepal.Length & Species
+  filter(Sepal.Length>5,Species=='versicolor') %>% #Filters using dataframe from above
+  mutate(SLength2=Sepal.Length^2) #Mutates using dataframe from above
+head(irisTemp)
+```
+
+Reshaping
+---
+- This is very tedious to do in base R and Excel
+- Reshaping operations in tidyr make this much easier
+- Four main commands:
+1. **gather** - gather columns into rows ('long format')
+2. **spread** - spread rows into columns ('wide format')
+3. **unite** - unite many columns into one (similar to *paste*)
+4. **separate** - separates one column into many (similar to *strsplit*)
+
+Reshaping - *gather*: columns to rows
+---
+- Make some data in "wide" format
+```{r,echo=T,tidy=F,eval=T,message=F,warning=F}
+#Some fake data to work with
+(fake <- data.frame(time = as.Date('2009-01-01') + 0:4,
+                      X = rnorm(5, 0, 1),Y = rnorm(5, 0, 2)))
+```
+
+Reshaping - *gather*: columns to rows
+---
+- Change "wide" dataframe to "long" dataframe
+```{r,echo=T,tidy=T,eval=T,message=F,warning=F}
+(fakeLong <- gather(fake,type, measurement, -time))
+```
+
+Reshaping - *spread*: rows to columns
+---
+```{r,echo=T,tidy=F,eval=T,message=F,warning=F}
+fakeLong <- gather(fake,type, measurement, -time)
+fakeLong %>% spread(type, measurement)
+fakeLong %>% spread(time, measurement) #What has this done?
+#Note: this must have unique row identifiers
+```
+
+Reshaping - *unite*: many columns into one
+---
+- Useful when combined with other reshaping functions
+
+```{r,echo=T,tidy=F,eval=T,message=F,warning=F}
+irisTemp <- iris %>% unite(newCol,Sepal.Length:Petal.Width,sep='_') 
+head(irisTemp,10)
+
+```
+
+Reshaping - *separate*: one column into many
+---
+
+```{r,echo=T,tidy=F,eval=T,message=F,warning=F}
+irisTemp %>% separate(newCol,c('SLength','SWidth','PLength','PWidth'),sep='_')
+```
+
+Reshaping - combinations of reshaping functions
+---
+Say we wanted lengths and widths in separate columns, split by Petal & Sepal
+```{r,echo=T,tidy=F,eval=T,message=F,warning=F}
+irisTemp <- iris %>% unite(sepals,Sepal.Length:Sepal.Width,sep='_') %>%
+  unite(petals,Petal.Length:Petal.Width,sep='_') 
+  head(irisTemp,10)
+```
+
+Reshaping - combinations of reshaping functions
+---
+- Now that measurements are *united*, we *gather* and then *separate* them
+```{r,echo=T,tidy=F,eval=T,message=F,warning=F}
+irisTemp %>% gather('Type','Measurement',sepals:petals) %>% 
+  separate(Measurement,c('Length','Width'),sep='_',convert=T) %>% 
+  head(10)
+```
+
+Exercises!
+---
+Using the *CO2* dataset:
+
+- Select only _non-chilled_ plants from _Quebec_
+- Pipe data frame to next command
+- Change the uptake dataset from long to wide format (each plant should have its own column), with a column at the beginning showing concentration
+- Hint: _filter_ rows and _select_ columns you need, then _spread_ to wide format
+
+```{r,echo=F}
+CO2 %>% 
+  filter(Type=='Quebec',Treatment=='nonchilled') %>% 
+  select(-Type,-Treatment) %>% 
+  spread(Plant,uptake)
+```
+
+Grouping 
+---
+- Often, we want to perform operations only on groups within data frames 
+- For example, what is the average of each species' _Petal.width_?
+
+```{r,echo=T,tidy=F,eval=T,message=F,warning=F}
+with(iris,tapply(Petal.Width,Species,mean))
+aggregate(Petal.Width~Species,data=iris,mean)
+```
+
+Grouping 
+---
+- How can this be done in dplyr/tidyr?
+```{r,echo=T,tidy=F,eval=T,message=F,warning=F}
+iris %>% group_by(Species) %>% 
+  summarize(meanPWidth=mean(Petal.Width),sdPWidth=sd(Petal.Width))
+```
+- Apply *grouping*, then use *summary function*
+- Data frame can be fed into other functions after summarizing
+
+Grouping - Examples
+---
+```{r,echo=T,tidy=F,eval=T,message=F,warning=F}
+iris %>% group_by(Species) %>% 
+  summarize(count=n(),med=median(Petal.Width),iqr=IQR(Petal.Width))
+```
+- *n* is empty, because it uses the length of the subsetted data frame
+
+Grouping - Examples
+---
+
+- Also useful for applying functions to subsets of data, *without* summarizing
+```{r,echo=T,tidy=F,eval=T,message=F,warning=F}
+iris %>% group_by(Species) %>% mutate(ID=1:n()) %>% #Makes ID column, with numbers 1-N
+  filter(ID<4) #Selects ID 1-3 from each group
+  
+```
+
+Grouping 
+---
+
+- Another way of doing the same thing
+```{r,echo=T,tidy=F,eval=T,message=F,warning=F}
+iris %>% group_by(Species) %>% 
+  slice(1:3) #Selects rows 1-3 from each group
+```
+- You can use most of the subset and window functions across groups
+
+Exercises!
+---
+Using the *InsectSprays* dataset:
+
+- Find the mean and SD of each type of spray type
+- Reshape dataframe so that each spray has its own column, with mean and SD in separate rows
+- Hint: get summary stats first, then _gather_ and _spread_
+
+```{r,echo=F}
+InsectSprays %>% group_by(spray) %>% 
+  summarize(mean=mean(count),sd=sd(count)) %>% 
+  gather('stat','meas',mean:sd) %>% 
+  spread(spray,meas)
+```
+
+Final remarks {.columns-2 .smaller}
+---
+
+- dplyr & tidyr interface well with other parts of the tidyverse
+
+```{r,echo=T,tidy=F,eval=T,message=F,warning=F,fig.height = 4, fig.width = 5, fig.align = "center"}
+library(ggplot2)
+CO2 %>% filter(conc==1000) %>% 
+  group_by(Type,Treatment) %>% 
+  summarize(meanUp=mean(uptake),
+            maxUp=max(uptake),
+            minUp=min(uptake)) %>% 
+  #Code for ggplot begins here
+  ggplot(aes(x=Type,col=Treatment))+
+  geom_pointrange(aes(y=meanUp,ymax=maxUp,ymin=minUp))+
+  labs(x='Area',y='Uptake at 1000ppm')+
+  scale_colour_manual(values=c('red','blue'))
+```
+
+Final remarks {.columns-2 .smaller}
+---
+- dplyr & tidyr can pass data frames to and from other functions: use '.' operator
+```{r,echo=T,tidy=F,eval=T,message=F,warning=F,fig.height = 4, fig.width = 5, fig.align = "center"}
+co2mod <- CO2 %>% 
+  filter(Type=='Quebec') %>% data.frame() %>% 
+  #Code for nls begins here
+  nls(uptake~SSasymp(conc,A,B,C),
+      start=list(A=40,B=-25,C=-5),data=.)
+
+data.frame(conc=seq(50,1000,20)) %>% 
+  predict(co2mod,newdata=.) %>% 
+  data.frame(conc=seq(50,1000,20),predUp=.) %>% 
+  #Code for ggplot begins here
+  ggplot(aes(conc,predUp))+
+  geom_line()+
+  geom_point(data=filter(CO2,Type=='Quebec'),
+             aes(conc,uptake))+
+  labs(x='CO2 Concentration',y='Uptake')
+  
+```
