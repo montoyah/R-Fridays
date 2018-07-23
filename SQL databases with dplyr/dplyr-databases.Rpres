@@ -1,0 +1,477 @@
+An introduction to databases with dplyr
+========================================================
+author: Lakin Wecker
+date: 2018-07-20
+autosize: true
+
+Outline 
+========================================================
+
+  1. The what and the why of a databases
+  1. Querying data from a single table
+  1. An example database and some of its tables
+  1. Combining data from multiple tables in a single query
+
+What is a database?
+========================================================
+incremental: true
+
+![database icon](figures-pres/database.png)
+***
+
+- Stores your data
+- Query your data
+- Manipulate your data
+
+Types of databases
+========================================================
+incremental: true
+
+- Relational Databases
+  - Structured Query Language - SQL
+- NoSQL
+  - these are varied and important ,but we're not covering them today.
+
+Why use a database?
+========================================================
+incremental: true
+
+- Atomicity
+- Consistency
+- Isolation
+- Durability
+- *ACID*
+
+Why use an SQL database?
+========================================================
+incremental: true
+
+- Efficient queries in the face of huge data sets
+- Structure guarantees data looks the way you expect
+- Concurrent access
+
+dplyr: Available databases
+========================================================
+PostgreSQL
+----------
+![PostgreSQL](figures-pres/pg-logo.png) 
+
+![MySQL](figures-pres/mysql-logo.png)
+
+![SQLite3](figures-pres/sqlite-logo.gif)
+
+dplyr: SQLite3
+========================================================
+
+* Embedded and easy to install
+* Doesn't require you to run a separate program
+* Is quite powerful
+
+dplyr: Lahman Database
+========================================================
+
+http://lahman.r-forge.r-project.org/
+
+* Pitching
+* Hitting
+* Fielding 
+* Other stats
+
+***
+
+![batting stats](figures-pres/batting-stats.png)
+
+dplyr: Installing the database
+========================================================
+
+* Package installation order
+```{r dependencies, include=TRUE, message=FALSE}
+if(!require(RSQLite)) install.packages("RSQLite")
+if(!require(dplyr)) install.packages("dplyr")
+if(!require(dbplyr)) install.packages("dbplyr")
+if(!require(Lahman)) install.packages("Lahman")
+library(RSQLite)
+library(dplyr)
+library(dbplyr)
+library(Lahman)
+```
+
+dplyr: Connecting to a database
+========================================================
+
+```{r connection, include=TRUE, eval=FALSE}
+src_sqlite()
+
+src_postgresql()
+
+src_mysql()
+
+lahman_sqlite()
+
+```
+
+dplyr: Connecting to Lahmann
+========================================================
+
+```{r database, echo=TRUE, message=FALSE}
+db_connection <- lahman_sqlite()
+```
+
+dplyr: What data is available?
+========================================================
+
+* Databases can contain many tables
+* To see which ones are available, print the connection
+```{r db reference, include=TRUE}
+print(db_connection)
+```
+
+dplyr: Referencing a single table
+========================================================
+First we have to tell dplyr which tables we will use.
+```{r table reference, include=TRUE}
+Batting <- tbl(db_connection, "Batting")
+```
+
+dplyr: Exploring the structure
+========================================================
+The `str()` function isn't particularly useful.
+```{r exploring the structure with str, include=TRUE}
+str(Batting)
+```
+
+dplyr: Tibbles and their output.
+========================================================
+Printing the table gives us the structure:
+```{r exploring the structure, include=TRUE}
+print(Batting) # Does the same thing
+```
+
+dplyr: Querying from a single table
+========================================================
+incremental: true
+
+Let's ask for all player ids with the year and the number of runs batted in (RBI):
+```{r using select, include=TRUE}
+Batting %>% select(playerID, yearID, RBI)
+```
+
+dplyr: Example Filter #1
+========================================================
+incremental: true
+
+Everyone that has had exactly 13 RBIs in a season:
+```{r using filter #1, include=TRUE}
+Batting %>%
+  select(playerID, yearID, RBI) %>% 
+  filter(RBI == 13)
+```
+
+dplyr: Example Filter #2
+========================================================
+incremental: true
+
+Everyone that has had more than 170 RBIs in a season:
+```{r using filter #2, include=TRUE}
+Batting %>%
+  select(playerID, yearID, RBI) %>% 
+  filter(RBI > 170)
+```
+
+dplyr: Example Filter #3
+========================================================
+incremental: true
+
+For everyone that has had more than 100 RBIs and 200 Strikeouts (SO) in a season:
+```{r using filter #3, include=TRUE}
+Batting %>%
+  select(playerID, yearID, RBI, SO) %>% 
+  filter(RBI > 100 & SO > 200)
+```
+
+dplyr: Example arrange #1
+========================================================
+incremental: true
+
+Example, let's find the players with the most strikeouts in a season:
+```{r using arrange #1, include=TRUE}
+Batting %>%
+  select(playerID, yearID, SO) %>% 
+  arrange(SO)
+```
+
+dplyr: Example arrange #2
+========================================================
+incremental: true
+
+Let's try that again and this time filter out NA data
+```{r using arrange #2, include=TRUE}
+Batting %>%
+  select(playerID, yearID, SO) %>% 
+  filter(!is.na(SO)) %>% 
+  arrange(SO)
+```
+
+dplyr: Example arrange #3
+========================================================
+incremental: true
+
+```{r using arrange #3, include=TRUE}
+Batting %>%
+  select(playerID, yearID, SO) %>% 
+  filter(!is.na(SO)) %>% 
+  arrange(desc(SO))
+```
+
+dplyr: Example arrange #4
+========================================================
+incremental: true
+
+The players with the most home runs in a year
+```{r using arrange #4, include=TRUE}
+Batting %>%
+  select(playerID, yearID, HR) %>% 
+  arrange(desc(HR))
+```
+
+
+dplyr: Group By / Summarize #1
+========================================================
+incremental: true
+
+Who has played the most games (G) as a batter in their career?
+```{r most games, include=TRUE}
+Batting %>%
+  group_by(playerID) %>% 
+  summarise(total_games = sum(G, na.rm=TRUE)) %>%
+  arrange(desc(total_games)) %>%  
+  select(playerID, total_games) 
+```
+
+dplyr: Group By / Summarize #2
+========================================================
+incremental: true
+
+Who has the most home runs (HR) per game played a batter in their career?
+```{r most home runs per game, include=TRUE, eval=FALSE}
+Batting %>%
+  group_by(playerID) %>%
+  summarise(
+    total_HR_per_game = (sum(HR, na.rm=TRUE)+0.0) / (sum(G, na.rm=TRUE)+0.0),
+    total_HR = sum(HR, na.rm=TRUE),
+    total_G = sum(G, na.rm=TRUE)
+  ) %>%
+  arrange(desc(total_HR_per_game)) %>%
+  select(playerID, total_HR_per_game, total_HR, total_G) 
+```
+
+dplyr: Group By / Summarize #2 Results
+========================================================
+```{r most home runs per game results, include=TRUE, echo=FALSE}
+Batting %>%
+  group_by(playerID) %>%
+  summarise(
+    total_HR_per_game = (sum(HR, na.rm=TRUE)+0.0) / (sum(G, na.rm=TRUE)+0.0),
+    total_HR = sum(HR, na.rm=TRUE),
+    total_G = sum(G, na.rm=TRUE)
+  ) %>%
+  arrange(desc(total_HR_per_game)) %>%
+  select(playerID, total_HR_per_game, total_HR, total_G) 
+```
+
+dplyr: Group By / Summarize #3
+========================================================
+incremental: true
+
+Also, as expected the people with the highest home runs per game are the ones that managed to hit a few home runs in a few games.  We're more interested in people who played more games than this.  So how can we do that?  Let's filter by `total_G`:
+```{r most home runs per game with 2000 games played, include=TRUE, eval=FALSE}
+Batting %>%
+  group_by(playerID) %>%
+  summarise(
+    total_HR_per_game = (sum(HR, na.rm=TRUE)+0.0) / (sum(G, na.rm=TRUE)+0.0),
+    total_HR = sum(HR, na.rm=TRUE),
+    total_G = sum(G, na.rm=TRUE)
+  ) %>%
+  arrange(desc(total_HR_per_game)) %>%
+  filter(total_G > 2000) %>% 
+  select(playerID, total_HR_per_game, total_HR, total_G) 
+```
+
+dplyr: Group By / Summarize #3 Results
+========================================================
+```{r most home runs per game with 2000 games played results, include=TRUE, echo=FALSE}
+Batting %>%
+  group_by(playerID) %>%
+  summarise(
+    total_HR_per_game = (sum(HR, na.rm=TRUE)+0.0) / (sum(G, na.rm=TRUE)+0.0),
+    total_HR = sum(HR, na.rm=TRUE),
+    total_G = sum(G, na.rm=TRUE)
+  ) %>%
+  arrange(desc(total_HR_per_game)) %>%
+  filter(total_G > 2000) %>% 
+  select(playerID, total_HR_per_game, total_HR, total_G) 
+```
+
+dplyr: Single Table conclusions
+========================================================
+incremental: true
+
+ * Flexible
+ * Syntax is identical to dplyr on spreadsheets
+
+dplyr: Querying from Multiple tables
+========================================================
+incremental: true
+
+- Narrow vs Wide
+- Relationships
+- Data Normalization
+- Joins
+
+dplyr: Narrow Format
+========================================================
+incremental: true
+![Narrow format data](figures/narrow-format.png)
+
+dplyr: Wide Format
+========================================================
+incremental: true
+![Narrow format data](figures/wide-format.png)
+
+
+Relational Databases
+========================================================
+incremental: true
+
+- Relationships are important
+- Individual pieces of data are not duplicated (normalized)
+
+Example Duplication
+========================================================
+![data duplication](figures/example-data-duplication.png)
+
+Example Database Structure
+========================================================
+incremental: true
+![data normalized data](figures/example-data-normalization.png)
+- Data is split into two sets:
+  - Volunteer
+  - Sample
+
+A mildly Complicated Relational example
+========================================================
+incremental: true
+
+![Complicated ERD](figures-pres/erd.jpg)
+http://prp.wikidot.com/
+
+Joining Data
+========================================================
+There are 6 types of joins that dplyr can use. We will talk about 3:
+* Inner Join
+* Left Join
+* Right Join
+
+Joining Data
+========================================================
+![Joining](figures/join-data.png)
+
+Inner Join
+========================================================
+These records have a match:
+
+![Joining](figures/join-first-record.png)
+
+Inner Join
+========================================================
+So do these:
+
+![Joining](figures/join-second-record.png)
+
+Inner Join
+========================================================
+But the third person does not
+
+![Joining](figures/inner-join-third-record.png)
+
+Inner Join Results
+========================================================
+The first person record has two emails. So how does the database resolve this situation?
+
+![Joining](figures/inner-join-results.png)
+
+Inner Join example
+========================================================
+incremental: true
+
+Let's find a player that was on the hall of fame ballot more than once
+and query for the amount of games they played in 1922 and 1923
+```{r get new table, include=TRUE}
+HallOfFame = tbl(db_connection, "HallOfFame")
+```
+```{r inner join example, include=TRUE}
+HallOfFame %>%
+  inner_join(Batting, by="playerID", suffix=c(".hf", ".ba")) %>%
+  filter(playerID=="adamssp01" & yearID.ba %in% c(1922, 1923)) %>%
+  select(playerID, yearID.hf, G, yearID.ba)
+```
+
+
+
+Left / Right Joins
+========================================================
+incremental: true
+
+The other type of joins I'll cover today are:
+* Left Joins
+* Right Joins
+
+Left Join
+========================================================
+![Left Join](figures/left-join-third-record.png)
+
+Left Join Data Example
+========================================================
+![Left Join](figures/left-join-results.png)
+
+Left Join Example
+========================================================
+incremental: true
+
+How many hits did Peter Rose have in regular and post season games per year.
+```{r left join example, include=TRUE}
+BattingPost = tbl(db_connection, "BattingPost")
+```
+```{r left join example 2, include=TRUE, eval=FALSE}
+# use left join
+Batting %>%
+  left_join(BattingPost, by=c("yearID", "playerID"), suffix=c(".regular", ".postseason")) %>%
+  filter(playerID=="rosepe01") %>%
+  group_by(yearID) %>%
+  summarise(
+    playerID=playerID,
+    regularH=H.regular,
+    yearID=yearID,
+    postH=sum(H.postseason, na.rm=TRUE)
+  ) %>% 
+  select(playerID, yearID, regularH, postH)
+```
+
+Left Join Example Output
+========================================================
+
+```{r left join example 2 output, include=TRUE, echo=FALSE, eval=TRUE}
+# use left join
+Batting %>%
+  left_join(BattingPost, by=c("yearID", "playerID"), suffix=c(".regular", ".postseason")) %>%
+  filter(playerID=="rosepe01") %>%
+  group_by(yearID) %>%
+  summarise(
+    playerID=playerID,
+    regularH=H.regular,
+    yearID=yearID,
+    postH=sum(H.postseason, na.rm=TRUE)
+  ) %>% 
+  select(playerID, yearID, regularH, postH)
+```
+
